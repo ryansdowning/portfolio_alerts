@@ -22,21 +22,21 @@ class User:
 
     def pfolio_check(self):
         self.change = self.portfolio.check_change()
-        if -User.NOTIFY_SIZE >= self.change >= User.NOTIFY_SIZE:
+        if self.portfolio.old_change + User.NOTIFY_SIZE <= self.change or self.change <= self.portfolio.old_change - User.NOTIFY_SIZE:
             self.send_notification()
+            self.portfolio.old_change = self.change
 
     def send_notification(self):
         current_time = datetime.datetime.now()
-        prices = self.portfolio.get_all_prices()
-        profit = self.portfolio.todays_open - self.portfolio.last_total
-        message = '\nHey {}\n{}\nNet Assets: {}\nDay\'s {}: {}\n\nCurrent Prices: {}'.format(
+        profit = self.portfolio.new_total - self.portfolio.open_total()
+        self.portfolio.old_change = self.change
+        message = '\nHey {},\n{}\nNet Assets: {}\nDay\'s {}: {}\n\n'.format(
             self.name,
             current_time.time().strftime('%I:%M:%S%p'),
-            self.portfolio.last_total,
+            round(self.portfolio.new_total, 2),
             'Gain' if profit >= 0 else 'Loss',
-            profit,
-            '\n'.join('{}: {}'.format(ticker.get_company(), price) for ticker, price in zip(self.portfolio.tickers, prices)))
-        print('Sent from your Twilio trial account -' + message)
+            profit)
+        print('Sent from your Twilio trial account -\n' + message)
         client.messages.create(from_=twilio_number, body=message, to=self.phone_number)
 
 
@@ -47,9 +47,10 @@ class Portfolio:
         self.amounts = amounts
         self.current_prices = []
         self.update_all_prices()
-        self.weights = np.array(self.current_prices)*np.array(self.amounts)/self.get_total()
-        self.last_total = self.get_total()
-        self.todays_open = self.get_todays_open()
+        self.weights = np.array(self.current_prices) * np.array(self.amounts) / self.get_total()
+        self.todays_open = self.open_total()
+        self.old_change = 0
+        self.new_total = self.todays_open
 
     def get_current_price(self, ticker):
         return ticker.get_price()
@@ -61,21 +62,21 @@ class Portfolio:
         self.current_prices = [self.get_current_price(ticker) for ticker in self.tickers]
 
     def get_total(self):
-        return np.sum(self.current_prices*np.array(self.amounts))
+        return np.sum(self.current_prices * np.array(self.amounts))
 
     def check_change(self):
         self.update_all_prices()
-        new_total = self.get_total()
-        change = new_total - self.last_total
-        percent = change/self.last_total*100
-        self.last_total = new_total
+        self.new_total = self.get_total()
+        change = self.new_total - self.todays_open
+        percent = change / self.todays_open + 1
+        print('{}: {}'.format(self.old_change, percent))
         return percent
 
     def get_todays_open(self):
-        return [ticker.get_open() for ticker in self.tickers]
+        return [ticker.get_previous()['close'] for ticker in self.tickers]
 
     def open_total(self):
-        return np.sum(self.todays_open*np.array(self.amounts))
+        return np.sum(self.get_todays_open() * np.array(self.amounts))
         
 test_user = User('Bob', '1235556789', ['AMZN', 'AAPL', 'NFLX', 'SPY', 'KO'],
             [1926.42, 218.37, 366.96, 291.22, 45.96],

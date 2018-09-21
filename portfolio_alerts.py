@@ -32,8 +32,9 @@ class User:
     def send_notification(self):
         profit = self.portfolio.new_total - self.portfolio.open_total()
         self.portfolio.old_change = self.change
-        total_gain = np.sum(np.array(self.portfolio.buy_prices)*self.portfolio.amounts)
-        total_change = (self.portfolio.new_total - total_gain) / total_gain * 100
+        buy_total = np.sum(np.array(self.portfolio.buy_prices)*self.portfolio.amounts)
+        total_gain = self.portfolio.new_total - buy_total
+        total_change = (self.portfolio.new_total - buy_total) / buy_total * 100
         message = '\nHey {},\n{}\nNet Assets: {}\nDay\'s {}: {} ({}%)\nTotal Gain: {} ({}%)'.format(
             self.name,
             self.last_notification.time().strftime('%I:%M:%S%p'),
@@ -45,7 +46,6 @@ class User:
             round(total_change, 2))
         print('Sent from your Twilio trial account -\n' + message)
         client.messages.create(from_=twilio_number, body=message, to=self.phone_number)
-
 
 class Portfolio:
     def __init__(self, tickers, buy_prices, amounts):

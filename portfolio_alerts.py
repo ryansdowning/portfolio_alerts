@@ -18,24 +18,31 @@ class User:
         self.phone_number = '+1' + phone_number
         self.portfolio = Portfolio(tickers, buy_prices, amounts)
         self.change = 0
-        self.last_notification = datetime.datetime.now()
+        self.last_notification = datetime.datetime.now() - datetime.timedelta(minutes=60)
 
     def pfolio_check(self):
         self.change = self.portfolio.check_change()
-        if self.portfolio.old_change + User.NOTIFY_SIZE <= self.change or self.change <= self.portfolio.old_change - User.NOTIFY_SIZE:
+        current_time = datetime.datetime.now()
+        time_change = (current_time - self.last_notification).seconds
+        if (self.portfolio.old_change + User.NOTIFY_SIZE <= self.change or self.change <= self.portfolio.old_change - User.NOTIFY_SIZE) and time_change >= 1800:
             self.send_notification()
             self.portfolio.old_change = self.change
+            self.last_notification = current_time
 
     def send_notification(self):
-        current_time = datetime.datetime.now()
         profit = self.portfolio.new_total - self.portfolio.open_total()
         self.portfolio.old_change = self.change
-        message = '\nHey {},\n{}\nNet Assets: {}\nDay\'s {}: {}\n\n'.format(
+        total_gain = np.sum(np.array(self.portfolio.buy_prices)*self.portfolio.amounts)
+        total_change = (self.portfolio.new_total - total_gain) / total_gain * 100
+        message = '\nHey {},\n{}\nNet Assets: {}\nDay\'s {}: {} ({}%)\nTotal Gain: {} ({}%)'.format(
             self.name,
-            current_time.time().strftime('%I:%M:%S%p'),
+            self.last_notification.time().strftime('%I:%M:%S%p'),
             round(self.portfolio.new_total, 2),
             'Gain' if profit >= 0 else 'Loss',
-            profit)
+            round(profit, 2),
+            round(self.change, 2),
+            round(total_gain, 2),
+            round(total_change, 2))
         print('Sent from your Twilio trial account -\n' + message)
         client.messages.create(from_=twilio_number, body=message, to=self.phone_number)
 
